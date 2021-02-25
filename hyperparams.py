@@ -3,12 +3,13 @@ import os
 # PARAMETERS
 EPOCHS = 40
 BATCH_SIZE = 8
-LEARNING_RATE = 0.0001
-
+LEARNING_RATE = 0.0005
+N_CLASSES = 2
 # PATHS
 BASE_DATA = 'data/'
 BASE_OUTPUT = 'output/'
 SCORE_CALCIUM_DATA = os.path.join(BASE_DATA, 'sc_run')
+GLAUCOMA_DATA = os.path.join(BASE_DATA, 'glaucoma')
 TRAIN = 'train'
 TEST = 'test'
 

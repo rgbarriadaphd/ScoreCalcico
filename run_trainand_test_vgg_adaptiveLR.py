@@ -5,13 +5,14 @@ import os
 import statistics
 import torch
 from PIL import Image, ImageOps
+from utils import statistics
 from torchvision import datasets, models, transforms
 from data_selection import ScoreCalciumSelection
 from hyperparams import *
 import torch.nn as nn
 from torch import optim
 from tqdm import tqdm
-from utils import statistics
+
 
 def load_and_transform_data(dataset, batch_size=1, data_augmentation=False):
     # Define transformations that will be applied to the images
@@ -97,6 +98,7 @@ def train_model(model, device, train_loader, test_loader, epochs=1, batch_size=4
     ''')
     optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=4e-2)
     criterion = nn.CrossEntropyLoss()
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[int(0.2*EPOCHS), int(0.7*EPOCHS)], gamma=0.2)
 
     acc_model = 0
     for epoch in range(epochs):
@@ -116,9 +118,10 @@ def train_model(model, device, train_loader, test_loader, epochs=1, batch_size=4
                 loss = criterion(prediction, ground)
                 loss.backward()
                 optimizer.step()
+                scheduler.step()
 
                 if epoch % 5 == 0:
-                    pbar.set_postfix(**{'loss (batch) ': loss.item(), 'test ': acc_model})
+                    pbar.set_postfix(**{'LR': optimizer.param_groups['lr'], 'loss (batch) ': loss.item(), 'test ': acc_model})
                 else:
                     pbar.set_postfix(**{'loss (batch) ': loss.item()})
                 pbar.update(sample.shape[0])
@@ -172,7 +175,7 @@ if __name__ == '__main__':
         logging.info("Train model")
         # Load and transform datasets
         train_data_loader, n_classes = load_and_transform_data(os.path.join(SCORE_CALCIUM_DATA, TRAIN), BATCH_SIZE,
-                                                               data_augmentation=False)
+                                                               data_augmentation=True)
         net = train_model(model=net,
                           device=device,
                           train_loader=train_data_loader,
