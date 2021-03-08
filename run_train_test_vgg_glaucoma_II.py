@@ -171,6 +171,16 @@ if __name__ == '__main__':
         logging.info(f'Saving model.......{glaucoma_model_path}')
         torch.save(net.state_dict(), glaucoma_model_path)
 
+    # Freeze al layers except the las ones:
+    for param in net.features.parameters():
+        param.require_grad = False
+
+    # Newly created modules have require_grad=True by default
+    num_features = net.classifier[6].in_features
+    features = list(net.classifier.children())[:-1]  # Remove last layer
+    features.extend([nn.Linear(num_features, net)])  # Add our layer with 2 outputs
+    net.classifier = nn.Sequential(*features)  # Replace the model classifier
+    
     # Generate run test
     rt = ScoreCalciumSelection()
     folds_acc = []
