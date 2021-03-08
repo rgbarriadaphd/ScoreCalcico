@@ -33,7 +33,6 @@ def load_and_transform_data(dataset, batch_size=1, data_augmentation=False):
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
-
     image_datasets = datasets.ImageFolder(dataset, transform=data_transforms)
     data_loader = torch.utils.data.DataLoader(image_datasets, batch_size=batch_size, shuffle=True, num_workers=4)
 
@@ -194,11 +193,10 @@ if __name__ == '__main__':
         folds_acc.append(acc_model_test_after)
 
     # Confident interval computation
-        # Confident interval computation
-        mean, stdev, offset, ci = statistics.get_fold_metrics(folds_acc)
-        logging.info(f'Model performance:')
-        logging.info(f'     Folds Acc.: {folds_acc}')
-        logging.info(f'     Mean: {mean}')
-        logging.info(f'     Stdev: {stdev}')
-        logging.info(f'     Offset: {offset}')
-        logging.info(f'     CI:(95%) : {ci}')
+    mean, stdev, offset, ci = statistics.get_fold_metrics(folds_acc)
+    logging.info(f'Model performance:')
+    logging.info(f'     Folds Acc.: {folds_acc}')
+    logging.info(f'     Mean: {mean}')
+    logging.info(f'     Stdev: {stdev}')
+    logging.info(f'     Offset: {offset}')
+    logging.info(f'     CI:(95%) : {ci}')

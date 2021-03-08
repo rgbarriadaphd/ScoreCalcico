@@ -5,14 +5,13 @@ import os
 import statistics
 import torch
 from PIL import Image, ImageOps
-from utils import statistics
 from torchvision import datasets, models, transforms
 from data_selection import ScoreCalciumSelection
 from hyperparams import *
 import torch.nn as nn
 from torch import optim
 from tqdm import tqdm
-
+from utils import statistics
 
 def load_and_transform_data(dataset, batch_size=1, data_augmentation=False):
     # Define transformations that will be applied to the images
@@ -40,7 +39,7 @@ def load_and_transform_data(dataset, batch_size=1, data_augmentation=False):
 
     logging.info(f'Loaded {len(image_datasets)} images under {dataset}: Classes: {image_datasets.classes}')
 
-    return data_loader, len(image_datasets.classes)
+    return data_loader
 
 
 def modify_net_architecture(nclasses, pret=True, freeze_layers=True, architecture=''):
@@ -57,6 +56,8 @@ def modify_net_architecture(nclasses, pret=True, freeze_layers=True, architectur
         logging.info(f'Freeze pretrained layers')
         for param in model.features.parameters():
             param.require_grad = False
+    else:
+        logging.info(f'Propagate gradient over all layers')
 
     # Newly created modules have require_grad=True by default
     num_features = model.classifier[6].in_features
@@ -87,7 +88,7 @@ def evaluate_model(model, dataloader, device):
     return (100 * correct) / total
 
 
-def train_model(model, device, train_loader, test_loader, epochs=1, batch_size=4, lr=0.1):
+def train_model(model, device, train_loader, epochs=1, batch_size=4, lr=0.1, test_loader=None):
     n_train = len(train_loader.dataset)
     logging.info(f'''Starting training:
         Epochs:          {epochs}
@@ -98,11 +99,10 @@ def train_model(model, device, train_loader, test_loader, epochs=1, batch_size=4
     ''')
     optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=4e-2)
     criterion = nn.CrossEntropyLoss()
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[int(0.2*EPOCHS), int(0.7*EPOCHS)], gamma=0.2)
 
     acc_model = 0
     for epoch in range(epochs):
-        if epoch % 5 == 0:
+        if epoch % 5 == 0 and test_loader:
             acc_model = evaluate_model(model, test_loader, device)
 
         model.train(True)
@@ -118,10 +118,9 @@ def train_model(model, device, train_loader, test_loader, epochs=1, batch_size=4
                 loss = criterion(prediction, ground)
                 loss.backward()
                 optimizer.step()
-                scheduler.step()
 
-                if epoch % 5 == 0:
-                    pbar.set_postfix(**{'LR': optimizer.param_groups['lr'], 'loss (batch) ': loss.item(), 'test ': acc_model})
+                if epoch % 5 == 0 and test_loader:
+                    pbar.set_postfix(**{'loss (batch) ': loss.item(), 'test ': acc_model})
                 else:
                     pbar.set_postfix(**{'loss (batch) ': loss.item()})
                 pbar.update(sample.shape[0])
@@ -130,8 +129,7 @@ def train_model(model, device, train_loader, test_loader, epochs=1, batch_size=4
 
 if __name__ == '__main__':
     """
-    VGG-16 pretrained simple example.
-    Trying to understand both data augmentation and output values (Model robustness)
+    VGG-16 Pretrain Imagenet, fine-tunning de la red entera con Glaucoma, fine-tunning con CAC de la última capa.
     """
     # Login instance
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -142,47 +140,65 @@ if __name__ == '__main__':
 
     # Define model architecture
     model_architecture = 'vgg16'
+    net = modify_net_architecture(N_CLASSES, freeze_layers=False, architecture=model_architecture)
+    net.to(device=device)
+
+    model_path = os.path.join(BASE_OUTPUT, MODELS['init_architecture']['vgg16'])
+    if os.path.exists(model_path):
+        logging.info(f'Importing vgg16 model.......{model_path}')
+        net.load_state_dict(torch.load(model_path))
+    else:
+        logging.info(f'Saving model.......{model_path}')
+        torch.save(net.state_dict(), model_path)
+
+
+    logging.info("Train model with glaucoma images")
+
+    glaucoma_model_path = os.path.join(BASE_OUTPUT, MODELS['glaucoma'])
+    if os.path.exists(glaucoma_model_path):
+        logging.info(f'Importing glaucoma model.......{glaucoma_model_path}')
+        net.load_state_dict(torch.load(glaucoma_model_path))
+    else:
+
+        glaucoma_train_set = load_and_transform_data(GLAUCOMA_DATA, BATCH_SIZE,
+                                                     data_augmentation=False)
+        net = train_model(model=net,
+                          device=device,
+                          train_loader=glaucoma_train_set,
+                          epochs=100,
+                          batch_size=BATCH_SIZE,
+                          lr=LEARNING_RATE)
+        logging.info(f'Saving model.......{glaucoma_model_path}')
+        torch.save(net.state_dict(), glaucoma_model_path)
 
     # Generate run test
     rt = ScoreCalciumSelection()
     folds_acc = []
     for i in range(5):
+
+        net.load_state_dict(torch.load(glaucoma_model_path))
         t0 = time.time()
         rt.generate_run_set(i + 1)
 
         logging.info(f'Generate test with fold {i + 1}')
 
-        # test model
-        logging.info("Test model before training")
-        data_loader_test, n_classes = load_and_transform_data(os.path.join(SCORE_CALCIUM_DATA, TEST))
-
-        # Init model if exists in order to avoid random intit of weights on each iteration
-        net = modify_net_architecture(n_classes, freeze_layers=False, architecture=model_architecture)
-        model_path = os.path.join(BASE_OUTPUT, MODELS['init_architecture'][model_architecture])
-        if os.path.exists(model_path):
-            logging.info(f'Importing model.......{model_path}')
-            net.load_state_dict(torch.load(model_path))
-        else:
-            logging.info(f'Saving model.......{model_path}')
-            torch.save(net.state_dict(), model_path)
-
-        net.to(device=device)
+        data_loader_test = load_and_transform_data(os.path.join(SCORE_CALCIUM_DATA, TEST))
 
         # test model
         logging.info("Test model before training")
-        acc_model_test_before = evaluate_model(net, data_loader_test, device)
+        acc_model_test_glaucoma = evaluate_model(net, data_loader_test, device)
 
         logging.info("Train model")
         # Load and transform datasets
-        train_data_loader, n_classes = load_and_transform_data(os.path.join(SCORE_CALCIUM_DATA, TRAIN), BATCH_SIZE,
-                                                               data_augmentation=True)
+        train_data_loader = load_and_transform_data(os.path.join(SCORE_CALCIUM_DATA, TRAIN), BATCH_SIZE,
+                                                               data_augmentation=False)
         net = train_model(model=net,
                           device=device,
                           train_loader=train_data_loader,
-                          test_loader=data_loader_test,
                           epochs=EPOCHS,
                           batch_size=BATCH_SIZE,
-                          lr=LEARNING_RATE)
+                          lr=LEARNING_RATE,
+                          test_loader=data_loader_test)
 
         # # Save model
         # model_trained_path = os.path.join(BASE_OUTPUT, 'model_trained.pt')
@@ -193,9 +209,10 @@ if __name__ == '__main__':
         acc_model_test_after = evaluate_model(net, data_loader_test, device)
 
         logging.info(
-            f'Accuracy before training: {acc_model_test_before} and after training {acc_model_test_after}. | [{time.time() - t0}]')
+            f'Accuracy before training: {acc_model_test_glaucoma} and after training {acc_model_test_after}. | [{time.time() - t0}]')
         folds_acc.append(acc_model_test_after)
 
+    # Confident interval computation
     # Confident interval computation
     mean, stdev, offset, ci = statistics.get_fold_metrics(folds_acc)
     logging.info(f'Model performance:')

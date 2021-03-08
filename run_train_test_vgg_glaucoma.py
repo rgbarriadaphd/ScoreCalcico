@@ -39,7 +39,7 @@ def load_and_transform_data(dataset, batch_size=1, data_augmentation=False):
 
     logging.info(f'Loaded {len(image_datasets)} images under {dataset}: Classes: {image_datasets.classes}')
 
-    return data_loader, len(image_datasets.classes)
+    return data_loader
 
 
 def modify_net_architecture(nclasses, pret=True, freeze_layers=True, architecture=''):
@@ -86,7 +86,7 @@ def evaluate_model(model, dataloader, device):
     return (100 * correct) / total
 
 
-def train_model(model, device, train_loader, test_loader, epochs=1, batch_size=4, lr=0.1):
+def train_model(model, device, train_loader, epochs=1, batch_size=4, lr=0.1, test_loader=None):
     n_train = len(train_loader.dataset)
     logging.info(f'''Starting training:
         Epochs:          {epochs}
@@ -100,7 +100,7 @@ def train_model(model, device, train_loader, test_loader, epochs=1, batch_size=4
 
     acc_model = 0
     for epoch in range(epochs):
-        if epoch % 5 == 0:
+        if epoch % 5 == 0 and test_loader:
             acc_model = evaluate_model(model, test_loader, device)
 
         model.train(True)
@@ -117,7 +117,7 @@ def train_model(model, device, train_loader, test_loader, epochs=1, batch_size=4
                 loss.backward()
                 optimizer.step()
 
-                if epoch % 5 == 0:
+                if epoch % 5 == 0 and test_loader:
                     pbar.set_postfix(**{'loss (batch) ': loss.item(), 'test ': acc_model})
                 else:
                     pbar.set_postfix(**{'loss (batch) ': loss.item()})
@@ -142,7 +142,7 @@ if __name__ == '__main__':
 
     # Init model if exists in order to avoid random intit of weights on each iteration
     net = modify_net_architecture(N_CLASSES, freeze_layers=False, architecture=model_architecture)
-    model_path = os.path.join(BASE_OUTPUT, MODELS['init_architecture'][model_architecture])
+    model_path = os.path.join(BASE_OUTPUT, 'model_glaucoma_pretrained.pt')
     if os.path.exists(model_path):
         logging.info(f'Importing model.......{model_path}')
         net.load_state_dict(torch.load(model_path))
@@ -153,26 +153,37 @@ if __name__ == '__main__':
     net.to(device=device)
 
     logging.info("Train model with glaucoma images")
-    glaucoma_train_set = load_and_transform_data(os.path.join(GLAUCOMA_DATA, TRAIN), BATCH_SIZE,
-                                                 data_augmentation=True)
-    net = train_model(model=net,
-                      device=device,
-                      train_loader=glaucoma_train_set,
-                      epochs=EPOCHS,
-                      batch_size=BATCH_SIZE,
-                      lr=LEARNING_RATE,
-                      test=False)
 
+    glaucoma_model_path = os.path.join(BASE_OUTPUT, MODELS['glaucoma'])
+    if os.path.exists(glaucoma_model_path):
+        logging.info(f'Importing glaucoma model.......{glaucoma_model_path}')
+        net.load_state_dict(torch.load(glaucoma_model_path))
+
+    else:
+
+        glaucoma_train_set = load_and_transform_data(GLAUCOMA_DATA, BATCH_SIZE,
+                                                     data_augmentation=True)
+        net = train_model(model=net,
+                          device=device,
+                          train_loader=glaucoma_train_set,
+                          epochs=100,
+                          batch_size=BATCH_SIZE,
+                          lr=LEARNING_RATE)
+        logging.info(f'Saving model.......{glaucoma_model_path}')
+        torch.save(net.state_dict(), glaucoma_model_path)
+
+    torch.save(net.state_dict(), 'pretrained_glaucoma.pt')
     # Generate run test
     rt = ScoreCalciumSelection()
     folds_acc = []
     for i in range(5):
+        net.load_state_dict(torch.load('pretrained_glaucoma.pt'))
         t0 = time.time()
         rt.generate_run_set(i + 1)
 
         logging.info(f'Generate test with fold {i + 1}')
 
-        data_loader_test, n_classes = load_and_transform_data(os.path.join(SCORE_CALCIUM_DATA, TEST))
+        data_loader_test = load_and_transform_data(os.path.join(SCORE_CALCIUM_DATA, TEST))
 
         # test model
         logging.info("Test model before training")
@@ -180,15 +191,15 @@ if __name__ == '__main__':
 
         logging.info("Train model")
         # Load and transform datasets
-        train_data_loader, n_classes = load_and_transform_data(os.path.join(SCORE_CALCIUM_DATA, TRAIN), BATCH_SIZE,
-                                                               data_augmentation=True)
+        train_data_loader = load_and_transform_data(os.path.join(SCORE_CALCIUM_DATA, TRAIN), BATCH_SIZE,
+                                                               data_augmentation=False)
         net = train_model(model=net,
                           device=device,
                           train_loader=train_data_loader,
-                          test_loader=data_loader_test,
                           epochs=EPOCHS,
                           batch_size=BATCH_SIZE,
-                          lr=LEARNING_RATE)
+                          lr=LEARNING_RATE,
+                          test_loader=data_loader_test)
 
         # # Save model
         # model_trained_path = os.path.join(BASE_OUTPUT, 'model_trained.pt')
@@ -203,11 +214,11 @@ if __name__ == '__main__':
         folds_acc.append(acc_model_test_after)
 
     # Confident interval computation
-        # Confident interval computation
-        mean, stdev, offset, ci = statistics.get_fold_metrics(folds_acc)
-        logging.info(f'Model performance:')
-        logging.info(f'     Folds Acc.: {folds_acc}')
-        logging.info(f'     Mean: {mean}')
-        logging.info(f'     Stdev: {stdev}')
-        logging.info(f'     Offset: {offset}')
-        logging.info(f'     CI:(95%) : {ci}')
+    # Confident interval computation
+    mean, stdev, offset, ci = statistics.get_fold_metrics(folds_acc)
+    logging.info(f'Model performance:')
+    logging.info(f'     Folds Acc.: {folds_acc}')
+    logging.info(f'     Mean: {mean}')
+    logging.info(f'     Stdev: {stdev}')
+    logging.info(f'     Offset: {offset}')
+    logging.info(f'     CI:(95%) : {ci}')
