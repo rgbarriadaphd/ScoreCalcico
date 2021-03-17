@@ -26,7 +26,8 @@ class ScoreCalciumSelection:
         logging.info(f'Running experiment based on {criteria} cross validation criteria')
 
         self._criteria = criteria
-        self._short_inputs()
+        if self._criteria == 'leave-one-out':
+            self._short_inputs()
         self._nfolds = 5 if criteria=='5-fold' else 10
 
         fold_length = int(len(os.listdir(ORG_MENOS)) / self._nfolds)

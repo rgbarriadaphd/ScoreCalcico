@@ -86,7 +86,7 @@ def evaluate_model(model, dataloader, device):
     return (100 * correct) / total
 
 
-def train_model(model, device, train_loader, test_loader, epochs=1, batch_size=4, lr=0.1):
+def train_model(model, device, train_loader, epochs=1, batch_size=4, lr=0.1, test_loader=None):
     n_train = len(train_loader.dataset)
     logging.info(f'''Starting training:
         Epochs:          {epochs}
@@ -100,7 +100,7 @@ def train_model(model, device, train_loader, test_loader, epochs=1, batch_size=4
 
     acc_model = 0
     for epoch in range(epochs):
-        if epoch % 5 == 0:
+        if epoch % 5 == 0 and test_loader:
             acc_model = evaluate_model(model, test_loader, device)
 
         model.train(True)
@@ -117,7 +117,7 @@ def train_model(model, device, train_loader, test_loader, epochs=1, batch_size=4
                 loss.backward()
                 optimizer.step()
 
-                if epoch % 5 == 0:
+                if epoch % 5 == 0 and test_loader:
                     pbar.set_postfix(**{'loss (batch) ': loss.item(), 'test ': acc_model})
                 else:
                     pbar.set_postfix(**{'loss (batch) ': loss.item()})
@@ -154,7 +154,7 @@ if __name__ == '__main__':
         data_loader_test, n_classes = load_and_transform_data(os.path.join(SCORE_CALCIUM_DATA, TEST))
 
         # Init model if exists in order to avoid random intit of weights on each iteration
-        net = modify_net_architecture(n_classes, freeze_layers=False, architecture=model_architecture)
+        net = modify_net_architecture(n_classes, freeze_layers=True, architecture=model_architecture)
         model_path = os.path.join(BASE_OUTPUT, MODELS['init_architecture'][model_architecture])
         if os.path.exists(model_path):
             logging.info(f'Importing model.......{model_path}')

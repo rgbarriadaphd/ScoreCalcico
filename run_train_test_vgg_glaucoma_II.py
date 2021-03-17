@@ -55,7 +55,7 @@ def modify_net_architecture(nclasses, pret=True, freeze_layers=True, architectur
     if freeze_layers:
         logging.info(f'Freeze pretrained layers')
         for param in model.features.parameters():
-            param.require_grad = False
+            param.requires_grad = False
     else:
         logging.info(f'Propagate gradient over all layers')
 
@@ -143,6 +143,7 @@ if __name__ == '__main__':
     net = modify_net_architecture(N_CLASSES, freeze_layers=False, architecture=model_architecture)
     net.to(device=device)
 
+
     model_path = os.path.join(BASE_OUTPUT, MODELS['init_architecture']['vgg16'])
     if os.path.exists(model_path):
         logging.info(f'Importing vgg16 model.......{model_path}')
@@ -152,41 +153,54 @@ if __name__ == '__main__':
         torch.save(net.state_dict(), model_path)
 
 
-    logging.info("Train model with glaucoma images")
+    # logging.info("Train model with glaucoma images")
+    #
+    # glaucoma_model_path = os.path.join(BASE_OUTPUT, MODELS['glaucoma'])
+    # if os.path.exists(glaucoma_model_path):
+    #     logging.info(f'Importing glaucoma model.......{glaucoma_model_path}')
+    #     net.load_state_dict(torch.load(glaucoma_model_path))
+    # else:
+    #
+    #     glaucoma_train_set = load_and_transform_data(GLAUCOMA_DATA, BATCH_SIZE,
+    #                                                  data_augmentation=False)
+    #     net = train_model(model=net,
+    #                       device=device,
+    #                       train_loader=glaucoma_train_set,
+    #                       epochs=100,
+    #                       batch_size=BATCH_SIZE,
+    #                       lr=LEARNING_RATE)
+    #
+    #     logging.info(f'Saving model.......{glaucoma_model_path}')
+    #     torch.save(net.state_dict(), glaucoma_model_path)
+    #
+    # # After train with glaucoma all net. Retrain classifier with CAC
+    # for param in net.features.parameters():
+    #     param.requires_grad = False
+    # for param in net.classifier.parameters():
+    #     param.requires_grad = False
+    # for params in net.classifier[-1].parameters():
+    #     param.requires_grad = True
+    #
+    # # TODO: Delete
+    # logging.info("---------------------Before Glaucoma --------------------------")
+    # for param in net.features.parameters(): logging.info(param.requires_grad)
+    # logging.info("........")
+    # for param in net.classifier.parameters(): logging.info(param.requires_grad)
+    logging.info("........")
 
-    glaucoma_model_path = os.path.join(BASE_OUTPUT, MODELS['glaucoma'])
-    if os.path.exists(glaucoma_model_path):
-        logging.info(f'Importing glaucoma model.......{glaucoma_model_path}')
-        net.load_state_dict(torch.load(glaucoma_model_path))
-    else:
+    # TODO: Delete
+    logging.info("---------------------After Train --------------------------")
+    for param in net.features.parameters(): logging.info(param.requires_grad)
+    logging.info("........")
+    for param in net.classifier.parameters(): logging.info(param.requires_grad)
+    logging.info("........")
 
-        glaucoma_train_set = load_and_transform_data(GLAUCOMA_DATA, BATCH_SIZE,
-                                                     data_augmentation=False)
-        net = train_model(model=net,
-                          device=device,
-                          train_loader=glaucoma_train_set,
-                          epochs=100,
-                          batch_size=BATCH_SIZE,
-                          lr=LEARNING_RATE)
-        logging.info(f'Saving model.......{glaucoma_model_path}')
-        torch.save(net.state_dict(), glaucoma_model_path)
-
-    # Freeze al layers except the las ones:
-    for param in net.features.parameters():
-        param.require_grad = False
-
-    # Newly created modules have require_grad=True by default
-    num_features = net.classifier[6].in_features
-    features = list(net.classifier.children())[:-1]  # Remove last layer
-    features.extend([nn.Linear(num_features, net)])  # Add our layer with 2 outputs
-    net.classifier = nn.Sequential(*features)  # Replace the model classifier
-    
     # Generate run test
     rt = ScoreCalciumSelection()
     folds_acc = []
     for i in range(5):
 
-        net.load_state_dict(torch.load(glaucoma_model_path))
+        net.load_state_dict(torch.load(model_path))
         t0 = time.time()
         rt.generate_run_set(i + 1)
 
