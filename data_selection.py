@@ -7,14 +7,14 @@ from distutils.dir_util import copy_tree
 OUTPUT_MAS = 'CACSmas400'
 OUTPUT_MENOS = 'CACSmenos400'
 
-ORG_BASE = 'data/originals/sc/'
+ORG_BASE = 'data/originals/sc_org_size/'
 ORG_MAS = os.path.join(ORG_BASE, OUTPUT_MAS)
 ORG_MENOS = os.path.join(ORG_BASE, OUTPUT_MENOS)
 
-FOLDS_BASE = 'data/folds/'
+FOLDS_BASE = 'data/folds_resized/'
 FOLD_ID = 'fold_'
 
-RUN_BASE = 'data/sc_run'
+RUN_BASE = 'data/sc_run_resized'
 
 class ScoreCalciumSelection:
 
