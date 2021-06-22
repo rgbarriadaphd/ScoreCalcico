@@ -13,6 +13,9 @@ from torch import optim
 from tqdm import tqdm
 from utils import statistics
 
+INPUT = 750
+BATCH_SIZE = 1
+
 def load_and_transform_data(dataset, batch_size=1, data_augmentation=False):
     # Define transformations that will be applied to the images
     # VGG-16 Takes 224x224 images as input, so we resize all of them
@@ -83,7 +86,6 @@ def evaluate_model(model, dataloader, device):
 
             total += ground.size(0)
             correct += (predicted == ground).sum().item()
-
     return (100 * correct) / total
 
 
@@ -111,8 +113,6 @@ def train_model(model, device, train_loader, epochs=1, batch_size=4, lr=0.1, tes
 
                 sample = sample.to(device=device, dtype=torch.float32)
                 ground = ground.to(device=device, dtype=torch.long)
-                print(sample.size())
-                print(ground.size())
 
                 optimizer.zero_grad()
                 prediction = model(sample)
@@ -127,6 +127,68 @@ def train_model(model, device, train_loader, epochs=1, batch_size=4, lr=0.1, tes
                 pbar.update(sample.shape[0])
     return model
 
+def out_dims(n, f, p, s):
+    return int(((n + 2 * p - f) / s) + 1)
+
+def conv(n):
+    return out_dims(n, 3, 1, 1)
+
+def pool(n):
+    return out_dims(n, 2, 0, 2)
+
+def compute_size(input_size):
+    features_ops = ["(0): Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))",
+                    "(1): ReLU(inplace=True)",
+                    "(2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))",
+                    "(3): ReLU(inplace=True)",
+                    "(4): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)",
+                    "(5): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))",
+                    "(6): ReLU(inplace=True)",
+                    "(7): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))",
+                    "(8): ReLU(inplace=True)",
+                    "(9): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)",
+                    "(10): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))",
+                    "(11): ReLU(inplace=True)",
+                    "(12): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))",
+                    "(13): ReLU(inplace=True)",
+                    "(14): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))",
+                    "(15): ReLU(inplace=True)",
+                    "(16): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)",
+                    "(17): Conv2d(256, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))",
+                    "(18): ReLU(inplace=True)",
+                    "(19): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))",
+                    "(20): ReLU(inplace=True)",
+                    "(21): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))",
+                    "(22): ReLU(inplace=True)",
+                    "(23): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)",
+                    "(24): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))",
+                    "(25): ReLU(inplace=True)",
+                    "(26): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))",
+                    "(27): ReLU(inplace=True)",
+                    "(28): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))",
+                    "(29): ReLU(inplace=True)",
+                    "(30): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)"]
+
+    n = input_size[0]
+    nc = input_size[2]
+    print(f'Input size: {n} x {n} x {nc} ')
+
+    for op in features_ops:
+        if 'Conv2d' in op:
+            nc = op.split(',')[1].replace(' ','')
+            n = conv(n)
+            op_type = op[0:3]
+        if 'MaxPool2d' in op:
+            n = pool(n)
+            op_type = op[0:3]
+        if 'ReLU' in op:
+            n = n
+            op_type = op[0:3]
+        print(f'After op {op_type} : {n} x {n} x {nc}')
+    return int(n), int(n), int(nc)
+
+
+
 
 if __name__ == '__main__':
     """
@@ -140,53 +202,46 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device: {device}')
 
-    # Define model architecture
-    model_architecture = 'vgg16'
+    sz = compute_size((INPUT, INPUT, 3))
 
-    # Init model if exists in order to avoid random intit of weights on each iteration
-    net = modify_net_architecture(N_CLASSES, freeze_layers=False, architecture=model_architecture)
-    model_path = os.path.join(BASE_OUTPUT, 'model_glaucoma_pretrained.pt')
-    net.to(device=device)
+    print(f'------\nReturned size --> {sz}')
+    print(f'Total number of features : {sz[0]*sz[1]*sz[2]}')
 
-    # Generate run test
-    rt = ScoreCalciumSelection()
-    folds_acc = []
-    for i in range(5):
-        t0 = time.time()
-        rt.generate_run_set(i + 1)
+    model = models.vgg16(pretrained=True)
 
-        logging.info(f'Generate test with fold {i + 1}')
+    for param in model.features.parameters():
+        param.require_grad = False
 
-        logging.info("Train model")
-        # Load and transform datasets
-        train_data_loader = load_and_transform_data(os.path.join(SCORE_CALCIUM_DATA_ORG, TRAIN), BATCH_SIZE,
-                                                               data_augmentation=False)
-        net = train_model(model=net,
-                          device=device,
-                          train_loader=train_data_loader,
-                          epochs=EPOCHS,
-                          batch_size=BATCH_SIZE,
-                          lr=LEARNING_RATE)
+    model.avgpool = nn.AdaptiveAvgPool2d((sz[0], sz[1]))
+    model.classifier[0] = nn.Linear(sz[0]*sz[1]*sz[2], 4096)
+    model.classifier[-1] = nn.Linear(4096, 2)
 
-        # # Save model
-        # model_trained_path = os.path.join(BASE_OUTPUT, 'model_trained.pt')
-        # torch.save(net.state_dict(), model_trained_path)
+    if torch.cuda.is_available():
+        model.cuda()
 
-        data_loader_test = load_and_transform_data(os.path.join(SCORE_CALCIUM_DATA_ORG, TEST))
+    # # num_features = model.classifier[6].in_features
+    # # print(num_features)
+    # # features = list(model.classifier.children())[:-1]  # Remove last layer
+    # # features.extend([nn.Linear(num_features, 2)])  # Add our layer with 2 outputs
+    # # model.classifier = nn.Sequential(*features)  # Replace the model classifier
+    #
+    #
+    # print(model)
 
-        # test model
-        logging.info("Test model after training")
-        acc_model_test_after = evaluate_model(net, data_loader_test, device)
+    optimizer = optim.SGD(model.parameters(), lr=0.001, weight_decay=4e-2)
+    criterion = nn.CrossEntropyLoss()
 
-        logging.info(
-            f'Accuracy after training {acc_model_test_after}. | [{time.time() - t0}]')
-        folds_acc.append(acc_model_test_after)
+    batch_size = BATCH_SIZE
+    sample = torch.rand((batch_size, 3, INPUT, INPUT))
+    ground = torch.zeros(batch_size, dtype=torch.long)
+    sample = sample.to(device=device)
+    ground = ground.to(device=device)
 
-    # Confident interval computation
-    mean, stdev, offset, ci = statistics.get_fold_metrics(folds_acc)
-    logging.info(f'Model performance:')
-    logging.info(f'     Folds Acc.: {folds_acc}')
-    logging.info(f'     Mean: {mean}')
-    logging.info(f'     Stdev: {stdev}')
-    logging.info(f'     Offset: {offset}')
-    logging.info(f'     CI:(95%) : {ci}')
+    optimizer.zero_grad()
+    prediction = model(sample)
+    loss = criterion(prediction, ground)
+    loss.backward()
+    optimizer.step()
+
+    print(prediction.size())
+    print(prediction)

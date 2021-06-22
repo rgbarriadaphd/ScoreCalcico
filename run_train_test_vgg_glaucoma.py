@@ -172,7 +172,7 @@ if __name__ == '__main__':
         logging.info(f'Saving model.......{glaucoma_model_path}')
         torch.save(net.state_dict(), glaucoma_model_path)
 
-    torch.save(net.state_dict(), 'pretrained_glaucoma.pt')
+    torch.save(net.state_dict(), 'output/pretrained_glaucoma.pt')
     # Generate run test
     rt = ScoreCalciumSelection()
     folds_acc = []
