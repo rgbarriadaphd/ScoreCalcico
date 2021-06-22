@@ -1,19 +1,7 @@
-import math
-import time
-import logging
-import os
-import statistics
 import torch
-from PIL import Image, ImageOps
 from torch.autograd.grad_mode import F
-from torchvision import datasets, models, transforms
-from data_selection import ScoreCalciumSelection
-from hyperparams import *
+from torchvision import models
 import torch.nn as nn
-from torch import optim
-from tqdm import tqdm
-from utils import statistics
-
 
 
 class ExtendedVGG(nn.Module):

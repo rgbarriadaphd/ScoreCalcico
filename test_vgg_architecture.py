@@ -1,17 +1,9 @@
-import math
-import time
 import logging
-import os
-import statistics
 import torch
-from PIL import Image, ImageOps
 from torchvision import datasets, models, transforms
-from data_selection import ScoreCalciumSelection
-from hyperparams import *
 import torch.nn as nn
 from torch import optim
 from tqdm import tqdm
-from utils import statistics
 
 INPUT = 750
 BATCH_SIZE = 1

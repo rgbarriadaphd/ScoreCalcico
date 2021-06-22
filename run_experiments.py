@@ -2,7 +2,7 @@ import logging
 import torch
 from torchvision import datasets, models, transforms
 from data_selection import ScoreCalciumSelection
-from hyperparams import *
+from utils.common import *
 import torch.nn as nn
 from torch import optim
 from tqdm import tqdm
