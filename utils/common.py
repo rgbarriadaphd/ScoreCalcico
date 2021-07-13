@@ -9,9 +9,14 @@ ORIGINAL_SC_SIZED_DATASET = os.path.join(BASE_DATA, 'originals/sc_org_size/')
 SC_MENOS = 'CACSmenos400'
 SC_MAS = 'CACSmas400'
 
+BASE_CLINICAL = os.path.join(BASE_DATA, 'clinical/base_clinical_data.xlsx')
+CLINICAL_PREDICTION = os.path.join(BASE_DATA, 'clinical/clinical_data_prediction.xlsx')
 SCORE_CALCIUM_DATA_ORG = os.path.join(BASE_DATA, 'sc_run_resized')
 SCORE_CALCIUM_DATA = os.path.join(BASE_DATA, 'sc_run')
 GLAUCOMA_DATA = os.path.join(BASE_DATA, 'originals/glaucoma/')
+
+# FOLD_PREDICTIONS = 'tmp/prediction_data.pckl'
+FOLD_PREDICTIONS = 'tmp/discr_preds.pckl'
 
 TRAIN = 'train'
 TEST = 'test'
