@@ -1,9 +1,19 @@
 import torch
 from torchvision import datasets, transforms
+import os
+import os.path
+from typing import Dict, List, Tuple
 
 class CustomImageFolder(datasets.ImageFolder):
     def __init__(self, dataset, transform=None):
         super(CustomImageFolder, self).__init__(dataset, transform=transform)
+
+    def _find_classes(self, dir: str) -> Tuple[List[str], Dict[str, int]]:
+        classes = [d.name for d in os.scandir(dir) if d.is_dir()]
+        classes.sort()
+        classes = [item for item in reversed(classes)]
+        class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
+        return classes, class_to_idx
 
     def __getitem__(self, index):
         sample, label = super(datasets.ImageFolder, self).__getitem__(index)

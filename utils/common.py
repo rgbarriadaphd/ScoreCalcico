@@ -20,6 +20,7 @@ FOLD_PREDICTIONS = 'tmp/discr_preds.pckl'
 
 TRAIN = 'train'
 TEST = 'test'
+TRAIN_TEST = 'train_test'
 
 # Models
 MODELS = {
